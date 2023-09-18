@@ -1,6 +1,23 @@
+require('dotenv').config()
 const { ApolloServer } = require('@apollo/server')
 const { startStandaloneServer } = require('@apollo/server/standalone')
-const { v1: uuid } = require('uuid')
+const mongoose = require('mongoose')
+mongoose.set('strictQuery', false)
+
+const Author = require('./models/author')
+const Book = require('./models/book')
+
+const MONGODB_URI = process.env.MONGODB_URI
+console.log(MONGODB_URI)
+
+console.log('connecting to', MONGODB_URI)
+
+mongoose
+  .connect(MONGODB_URI)
+  .then(console.log('connection established'))
+  .catch((error) => {
+    console.log('error connecting to MongoDB:', error.message)
+  })
 
 let authors = [
   {
@@ -109,7 +126,7 @@ const typeDefs = `
   type Book {
     title: String!
     published: Int!
-    author: String!
+    author: Author!
     id: ID!
     genres: [String!]!
   }
@@ -138,54 +155,72 @@ const typeDefs = `
 
 const resolvers = {
   Query: {
-    bookCount: () => books.length,
-    authorCount: () => authors.length,
-    allBooks: (root, args) => {
+    bookCount: async () => Book.collection.countDocuments(),
+    authorCount: async () => Author.collection.countDocuments(),
+    allBooks: async (root, args) => {
       if (args.author && args.genre) {
-        return books.filter(
-          (b) => b.author === args.author && b.genres.includes(args.genre)
-        )
+        const author = await Author.findOne({ name: args.author })
+        const books = await Book.find({
+          author: author.id,
+          genres: args.genre,
+        }).populate('author')
       }
       if (args.author) {
-        return books.filter((b) => args.author === b.author)
+        console.log('args.author', args.author)
+        const author = await Author.findOne({ name: args.author })
+        const books = await Book.find({ author: author.id }).populate('author')
+        return books
       }
       if (args.genre) {
-        return books.filter((b) => {
-          return b.genres.includes(args.genre)
-        })
+        return Book.find({ genres: args.genre }).populate('author')
       }
-      return books
+      return Book.find({}).populate('author')
     },
-    allAuthors: () => authors,
+    allAuthors: async () => Author.find({}),
   },
   Author: {
-    bookCount: (root) => {
-      return books.filter((b) => b.author === root.name).length
+    bookCount: async (root) => {
+      console.log('bookCOunt')
+      console.log({ root })
+
+      return Book.countDocuments({ author: root.id })
     },
   },
   Mutation: {
-    addBook: (root, args) => {
-      const author = authors.find(a => a.name === args.author)
+    addBook: async (root, args) => {
+      let author = await Author.findOne({ name: args.author })
       if (!author) {
-        authors = authors.concat({name: args.author, id: uuid(), born: null})
+        console.log('no author named', args.author)
+        const newAuthor = new Author({
+          name: args.author,
+          born: null,
+        })
+        await newAuthor.save()
+        author = await Author.findOne({ name: args.author })
+        console.log('author created', author)
       }
-      const newBook = {...args, id:uuid()}
-      books = books.concat(newBook)
+      console.log({ args })
+      const newBook = new Book({
+        title: args.title,
+        published: args.published,
+        genres: args.genres,
+        author: author,
+      })
+      await newBook.save()
       return newBook
     },
-    editAuthor: (root, args) => {
-      const author = authors.find(a => a.name === args.name)
+    editAuthor: async (root, args) => {
+      const author = await Author.findOne({ name: args.name })
+
       if (!author) {
         return null
       }
-      console.log(author);
-      updatedAuthor = {...author, born: args.setBornTo}
-      console.log(updatedAuthor);
-      authors = authors.map(a => a.name===args.name ? updatedAuthor : a)
-      return updatedAuthor
-
-    }
-  }
+      author.born = args.setBornTo
+      console.log(author)
+      author.save()
+      return author
+    },
+  },
 }
 
 const server = new ApolloServer({
