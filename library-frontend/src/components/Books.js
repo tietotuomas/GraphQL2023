@@ -9,6 +9,8 @@ const Books = (props) => {
     return null
   }
 
+  console.log(books.data);
+
 
   return (
     <div>
@@ -24,7 +26,7 @@ const Books = (props) => {
           {books.data.allBooks.map((b) => (
             <tr key={b.title}>
               <td>{b.title}</td>
-              <td>{b.author}</td>
+              <td>{b.author.name}</td>
               <td>{b.published}</td>
             </tr>
           ))}
