@@ -18,17 +18,15 @@ const Login = ({ setToken, show, notify, setPage }) => {
       const token = result.data.login.value
       setToken(token)
       localStorage.setItem('loggedInUser', token)
+      setPage('books')
     }
   }, [result.data]) // eslint-disable-line
-
-  console.log('login form loading')
 
   const handleSubmit = (event) => {
     event.preventDefault()
     login({ variables: { username, password } })
     setUsername('')
     setPassword('')
-    setPage('books')
   }
 
   if (!show) {
